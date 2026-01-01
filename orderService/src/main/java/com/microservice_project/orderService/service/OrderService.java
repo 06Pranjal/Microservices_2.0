@@ -1,5 +1,6 @@
 package com.microservice_project.orderService.service;
 
+import com.microservice_project.orderService.dto.InventoryResponse;
 import com.microservice_project.orderService.dto.OrderLineItemsDto;
 import com.microservice_project.orderService.dto.OrderRequest;
 import com.microservice_project.orderService.model.Order;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,26 +35,30 @@ public class OrderService {
 
         order.setOrderLineItemsList(orderLineItems);
 
-        List<String> skuCodesorder.getOrderLineItemsList()
+        List<String> skuCode=order.getOrderLineItemsList()
                 .stream()
                 .map(OrderLineItems::getSkuCode)
                 .toList();
 
         // Call Inventory Service and place order if product is in stock
-        Boolean result=webClient.get()
-                .uri("http://localhost:8082/api/inventory")
+        InventoryResponse[] inventoryResponsesArray=webClient.get()
+                .uri("http://localhost:8082/api/inventory",
+                        uriBuilder -> uriBuilder.queryParam("skuCode",skuCode).build())
                         .retrieve()
-                                .bodyToMono(Boolean.class)
-                // adding block method will make this communication Asynchronous a
+                                .bodyToMono(InventoryResponse[].class)
+
+                // adding block method will make this communication Synchronous
                                         .block();
 
-        if(Boolean.TRUE.equals(result)){
+        boolean allProductsInStock=Arrays.stream(inventoryResponsesArray).allMatch(InventoryResponse::isInStock);
+
+        if(allProductsInStock){
             orderRepository.save(order);
         }else{
             throw new IllegalArgumentException("Product is not in stock,please try again later");
         }
 
-        orderRepository.save(order);
+
     }
 
     private OrderLineItems mapToDto(OrderLineItemsDto orderLineItemsDto){
